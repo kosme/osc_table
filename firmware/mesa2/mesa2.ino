@@ -1,99 +1,88 @@
+#include <LiquidCrystal.h>
+
+#define ENC_A 14
+#define ENC_B 15
+#define ENC_PORT PINC
+#define boton 2
+
 int x;
 float actual = 1.0;
-float frecuencia=1;
-long periodo=2500;
-long nuevo;
-boolean cambiar=false;
+float frecuencia=2;
+long periodo;
+volatile boolean encendido=false;
+int8_t tmpdata;
+char contador=0;
 
 const int Enable = 6;
 const int Step = 5;
 const int pasos = 200; //Número de pasos del motor
 
-void setup() {
+LiquidCrystal lcd(13, 12, 11, 10, 9, 8);
+
+void setup() 
+{
+  get_periodo();
   pinMode(Enable,OUTPUT); // Enable 
   pinMode(Step,OUTPUT); // Step 
   digitalWrite(Enable,LOW); // Set Enable low 
-  Serial.begin(9600);
-  Serial.println("Indique la frecuencia");
+  pinMode(ENC_A, INPUT);
+  digitalWrite(ENC_A, HIGH);
+  pinMode(ENC_B, INPUT);
+  digitalWrite(ENC_B, HIGH);
+  pinMode(boton,INPUT);
+  digitalWrite(boton,HIGH);
+  lcd.begin(20, 4);
+  lcd.print("Control de mesa");
+  lcd.setCursor(0, 1);
+  lcd.print("Frecuencia:");
+  lcd.setCursor(0, 2);
+  lcd.print(frecuencia);
+  lcd.setCursor(0, 3);
+  lcd.print("Apagado");
+  attachInterrupt(0,onoff,LOW);
 }
 
-void loop() 
+void loop()
+{  
+  if(!encendido)
+  {
+    read_encoder();
+  }
+  else
+  {
+    for(x = 0; x < pasos; x++) // Loop 200 times 
+    {
+      digitalWrite(Step,HIGH); // Output high 
+      delayMicroseconds(periodo); // Wait 1/2 a ms 
+      digitalWrite(Step,LOW); // Output low 
+      delayMicroseconds(periodo); // Wait 1/2 a ms
+      read_encoder();
+    }
+  }
+}
+
+void onoff()
 {
-  if(Serial.available())
-  {
-    frecuencia=Serial.parseFloat();
-    Serial.print("Frecuencia: ");
-    Serial.println(frecuencia);
-    if((frecuencia > 0)&&(frecuencia<=5))
+  detachInterrupt(0);
+  noInterrupts();
+  delayMicroseconds(800000); //Debounce
+  if(!encendido)
     {
-      digitalWrite(Enable,LOW); //Permitir movimiento
-      nuevo = 10000/(4*frecuencia);
-      Serial.print("Periodo: ");
-      Serial.println(nuevo);
-      cambiar=true;
+      lcd.setCursor(0, 3);
+      lcd.print("Encendido");
     }
     else
     {
-      digitalWrite(Enable,HIGH); //Detener movimiento
-      periodo = 5000;
-      actual=0.5;
+      lcd.setCursor(0, 3);
+      lcd.print("Apagado  ");
     }
-    while(Serial.available())
-      Serial.read();
-  }
-  for(x = 0; x < pasos; x++) // Loop 200 times 
-  {
-    if(Serial.available())
-      break;
-    digitalWrite(Step,HIGH); // Output high 
-    delayMicroseconds(periodo); // Wait 1/2 a ms 
-    digitalWrite(Step,LOW); // Output low 
-    delayMicroseconds(periodo); // Wait 1/2 a ms
-  } 
-  if(cambiar)
-  {
-    if(nuevo!=periodo)
-    {
-      periodo=10000/(4*actual);
-      Serial.println(periodo);
-      Serial.println(actual);
-      if(actual>frecuencia)
-      {
-        actual= actual-0.1;
-      }
-      else //(frecuencia > actual)
-      {
-        actual= actual+0.1;
-      }
-      if(abs(periodo-nuevo)<5)
-      {
-        periodo= nuevo;
-        cambiar=false;
-      }
-    }
-    else
-      cambiar=false;
-/*    if(abs(nuevo-periodo)>249)
-      variar250();
-    else if(abs(nuevo-periodo)>99)
-      variar100();
-    else if(abs(nuevo-periodo)>49)
-      variar50();
-    else if(abs(nuevo-periodo)>9)
-    {
-      periodo=nuevo;
-      Serial.println(periodo);
-      cambiar=false;
-    }
-/*      variar10();
-    else if(abs(nuevo-periodo)>0)
-      variar1();
-    else
-      cambiar=false;*/
-  }
+    encendido=!encendido;
+    digitalWrite(Enable,!encendido);
+    attachInterrupt(0,onoff,LOW);
+    interrupts();
 }
 
-void variar250()
+/*void variar250()
 {
   Serial.println("variar250");
   if(nuevo>periodo)
@@ -124,4 +113,32 @@ void variar50()
     periodo=periodo-50;
   else{}
   Serial.println(periodo);
+}*/
+
+void read_encoder()
+{
+  static int8_t enc_states[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};
+  static uint8_t old_AB = 0;
+
+  old_AB <<= 2;                   //remember previous state
+  old_AB |= ( ENC_PORT & 0x03 );  //add current state
+  tmpdata=enc_states[( old_AB & 0x0f )];
+  if(tmpdata)
+  {
+    contador+=tmpdata;
+    if((contador%4)==0)
+    {
+      frecuencia+=(contador*0.0625);
+      get_periodo();
+      contador=0;
+      lcd.setCursor(0, 2);
+      lcd.print(frecuencia);
+      lcd.print("  ");
+    }
+  }
+}
+
+void get_periodo()
+{
+  periodo = 2500/frecuencia;
 }
