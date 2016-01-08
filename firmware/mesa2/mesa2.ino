@@ -16,6 +16,7 @@ char contador=0;
 const int Enable = 6;
 const int Step = 5;
 const int pasos = 200; //Número de pasos del motor
+const float ratio = 4; //Relaciòn entre engrane del eje y engrane del motor 
 
 LiquidCrystal lcd(13, 12, 11, 10, 9, 8);
 
@@ -140,5 +141,5 @@ void read_encoder()
 
 void get_periodo()
 {
-  periodo = 2500/frecuencia;
+  periodo = 2500/frecuencia*ratio;
 }
